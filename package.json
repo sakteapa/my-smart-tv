@@ -1,0 +1,68 @@
+{
+  "name": "my-smart-tv",
+  "version": "1.0.0",
+  "description": "Standalone Smart TV Display & Mobile Controller Workspace",
+  "main": "main.js",
+  "author": "Smart TV Systems",
+  "license": "ISC",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "build:win": "electron-builder --win nsis"
+  },
+  "keywords": [
+    "smart-tv",
+    "electron",
+    "socketio",
+    "robotjs"
+  ],
+  "dependencies": {
+    "@jitsi/robotjs": "^0.6.14",
+    "express": "^4.19.2",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.mysmarttv.app",
+    "productName": "My Smart TV",
+    "copyright": "Copyright © 2026",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "tv_display.html",
+      "public/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "My Smart TV",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "runAfterFinish": true
+    }
+  }
+}

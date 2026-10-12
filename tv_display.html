@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart TV Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d0f17;
+      --card-bg: rgba(255, 255, 255, 0.05);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.5);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+
+    body {
+      background: radial-gradient(circle at top right, #1a1e2e, var(--bg));
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      width: 100vw; height: 100vh; overflow: hidden; display: flex; flex-direction: column; position: relative;
+    }
+
+    #virtual-cursor {
+      position: absolute; width: 22px; height: 22px;
+      background: rgba(255, 255, 255, 0.95); border: 2px solid #3b82f6;
+      border-radius: 50%; box-shadow: 0 0 16px rgba(59, 130, 246, 0.8);
+      pointer-events: none; transform: translate(-50%, -50%);
+      transition: width 0.15s, height 0.15s, background-color 0.15s;
+      z-index: 99999; display: flex; align-items: center; justify-content: center;
+    }
+    #virtual-cursor::after { content: ''; width: 6px; height: 6px; background: #1e40af; border-radius: 50%; }
+    #virtual-cursor.clicking { transform: translate(-50%, -50%) scale(0.85); background-color: #60a5fa; }
+
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 24px 48px; background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+      z-index: 10;
+    }
+
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .logo-badge {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      width: 44px; height: 44px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px;
+    }
+    .brand h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+
+    .system-status { display: flex; align-items: center; gap: 18px; font-size: 15px; color: var(--text-muted); }
+    .clock { font-size: 22px; font-weight: 600; color: var(--text); }
+
+    .badge-status {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(239, 68, 68, 0.15); color: #f87171;
+      padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .badge-status.connected {
+      background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3);
+    }
+    .badge-status::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+    main {
+      flex: 1; padding: 10px 48px 40px;
+      display: flex; flex-direction: column; gap: 24px; position: relative; z-index: 10;
+    }
+
+    .section-title { font-size: 20px; font-weight: 600; color: #e5e7eb; margin-bottom: 12px; }
+
+    .app-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+    .app-card {
+      background: var(--card-bg); border: 2px solid var(--card-border);
+      border-radius: 20px; padding: 24px 20px; display: flex; flex-direction: column;
+      align-items: center; gap: 14px; cursor: pointer; backdrop-filter: blur(12px);
+      transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .app-card:hover, .app-card.focused {
+      transform: translateY(-6px) scale(1.04); border-color: var(--accent);
+      box-shadow: 0 12px 30px var(--accent-glow); background: rgba(59, 130, 246, 0.15);
+    }
+    .app-card.active-app { border-color: #10b981; box-shadow: 0 12px 30px rgba(16, 185, 129, 0.3); }
+
+    .app-icon {
+      width: 60px; height: 60px; border-radius: 16px;
+      display: flex; align-items: center; justify-content: center; font-size: 28px;
+    }
+    .app-name { font-size: 16px; font-weight: 600; color: var(--text); }
+    .app-category { font-size: 12px; color: var(--text-muted); }
+
+    .viewer-container {
+      flex: 1; background: #000; border-radius: 24px;
+      border: 2px solid rgba(255, 255, 255, 0.08); overflow: hidden;
+      display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.7); position: relative;
+    }
+    .viewer-toolbar {
+      background: #141721; padding: 10px 20px; display: flex; align-items: center;
+      justify-content: space-between; border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .viewer-url { font-size: 14px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+    .viewer-actions button {
+      background: rgba(255, 255, 255, 0.1); border: none; color: #fff;
+      padding: 6px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+    }
+    .app-frame { width: 100%; height: 100%; border: none; background: #000; flex: 1; }
+
+    /* Formal Pairing Modal */
+    #pairing-modal {
+      position: absolute; inset: 0; background: rgba(10, 12, 18, 0.92);
+      backdrop-filter: blur(24px); z-index: 9999; display: flex; align-items: center;
+      justify-content: center; transition: opacity 0.3s ease;
+    }
+    #pairing-modal.hidden { opacity: 0; pointer-events: none; }
+
+    .pairing-box {
+      background: #151924; border: 2px solid rgba(59, 130, 246, 0.35);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.85); border-radius: 32px; padding: 48px;
+      max-width: 680px; width: 90%; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 24px;
+    }
+    .pairing-content { display: flex; align-items: center; justify-content: center; gap: 40px; margin-top: 10px; }
+    .qr-container { background: #fff; padding: 14px; border-radius: 20px; }
+    #qr-canvas { display: block; }
+    .code-pill {
+      font-size: 40px; font-weight: 900; letter-spacing: 6px; color: #60a5fa;
+      background: rgba(59, 130, 246, 0.15); border: 2px dashed rgba(59, 130, 246, 0.4);
+      padding: 12px 20px; border-radius: 16px; font-family: monospace;
+    }
+    .audio-routing-status { font-size: 12px; color: #34d399; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div id="virtual-cursor" style="left: 50vw; top: 50vh;"></div>
+
+  <!-- Dynamic Pairing Modal -->
+  <div id="pairing-modal">
+    <div class="pairing-box">
+      <h2>Scan with Smart TV Remote App</h2>
+      <p style="color: var(--text-muted); font-size: 15px;">Open your Android Smart TV Remote App and scan this QR code. The app will automatically connect to your TV.</p>
+
+      <div class="pairing-content">
+        <div class="qr-container">
+          <canvas id="qr-canvas"></canvas>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px;">
+          <span style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted);">Pairing Code</span>
+          <div class="code-pill" id="display-pairing-id">------</div>
+          <div style="font-size: 13px; color: #94a3b8;" id="display-ip-address">IP: Detecting...</div>
+          <div class="audio-routing-status" id="audio-status-pill">🔊 HDMI Audio Routing: Active</div>
+        </div>
+      </div>
+
+      <button style="background: rgba(255,255,255,0.1); border: none; color: #fff; padding: 10px 24px; border-radius: 12px; cursor: pointer;" id="btn-hide-modal">Hide / Continue</button>
+    </div>
+  </div>
+
+  <header>
+    <div class="brand">
+      <div class="logo-badge">TV</div>
+      <div>
+        <h1>Smart TV Hub</h1>
+        <div style="font-size: 12px; color: var(--text-muted);">Secondary Display Extender</div>
+      </div>
+    </div>
+
+    <div class="system-status">
+      <div class="badge-status" id="remote-status-badge">Waiting for Remote App</div>
+      <button id="btn-show-pairing" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 6px 14px; border-radius: 10px; cursor: pointer; font-size: 13px;">Show QR Code</button>
+      <div class="clock" id="live-clock">12:00 PM</div>
+    </div>
+  </header>
+
+  <main>
+    <div class="section-title"><span>Featured Apps</span></div>
+
+    <div class="app-grid" id="apps-grid">
+      <div class="app-card focused active-app" tabindex="0" data-app-url="https://www.youtube.com/tv" data-app-name="YouTube TV">
+        <div class="app-icon" style="background: #ff0000; color: #fff;">▶</div>
+        <div class="app-name">YouTube TV</div>
+        <div class="app-category">Video Streaming</div>
+      </div>
+
+      <div class="app-card" tabindex="0" data-app-url="https://twitch.tv" data-app-name="Twitch">
+        <div class="app-icon" style="background: #9146ff; color: #fff;">👾</div>
+        <div class="app-name">Twitch</div>
+        <div class="app-category">Live Streaming</div>
+      </div>
+
+      <div class="app-card" tabindex="0" data-app-url="https://open.spotify.com" data-app-name="Spotify">
+        <div class="app-icon" style="background: #1db954; color: #fff;">🎵</div>
+        <div class="app-name">Spotify</div>
+        <div class="app-category">Music & Podcasts</div>
+      </div>
+
+      <div class="app-card" tabindex="0" data-app-url="https://netflix.com" data-app-name="Netflix">
+        <div class="app-icon" style="background: #e50914; color: #fff;">🎬</div>
+        <div class="app-name">Netflix</div>
+        <div class="app-category">Movies & Series</div>
+      </div>
+
+      <div class="app-card" tabindex="0" data-app-url="https://www.google.com" data-app-name="Web Browser">
+        <div class="app-icon" style="background: #4285f4; color: #fff;">🌐</div>
+        <div class="app-name">Web Browser</div>
+        <div class="app-category">Internet Search</div>
+      </div>
+    </div>
+
+    <div class="viewer-container">
+      <div class="viewer-toolbar">
+        <div class="viewer-url">
+          <span id="active-app-indicator">🟢 YouTube TV</span>
+          <span style="opacity: 0.5;">—</span>
+          <span id="active-url-text">https://www.youtube.com/tv</span>
+        </div>
+        <div class="viewer-actions">
+          <button id="btn-reload">↻ Reload</button>
+          <button id="btn-expand">⤢ Fullscreen App</button>
+        </div>
+      </div>
+      <iframe id="app-iframe" class="app-frame" src="https://www.youtube.com" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+    </div>
+  </main>
+
+  <script>
+    const cursor = document.getElementById('virtual-cursor');
+    const iframe = document.getElementById('app-iframe');
+    const gridCards = Array.from(document.querySelectorAll('.app-card'));
+    const modal = document.getElementById('pairing-modal');
+    const badge = document.getElementById('remote-status-badge');
+    let currentFocusIndex = 0;
+
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('live-clock').innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    function setFocusIndex(index) {
+      if (index < 0) index = 0;
+      if (index >= gridCards.length) index = gridCards.length - 1;
+      gridCards.forEach((c, i) => c.classList.toggle('focused', i === index));
+      currentFocusIndex = index;
+      gridCards[currentFocusIndex].focus();
+    }
+
+    function launchApp(card) {
+      const url = card.getAttribute('data-app-url');
+      const name = card.getAttribute('data-app-name');
+      iframe.src = url;
+      document.getElementById('active-app-indicator').innerText = `🟢 ${name}`;
+      document.getElementById('active-url-text').innerText = url;
+      gridCards.forEach(c => c.classList.remove('active-app'));
+      card.classList.add('active-app');
+    }
+
+    gridCards.forEach((card, idx) => {
+      card.addEventListener('click', () => { setFocusIndex(idx); launchApp(card); });
+    });
+
+    document.getElementById('btn-hide-modal').addEventListener('click', () => modal.classList.add('hidden'));
+    document.getElementById('btn-show-pairing').addEventListener('click', () => modal.classList.remove('hidden'));
+
+    function renderQRCode(payload) {
+      const canvas = document.getElementById('qr-canvas');
+      if (window.QRCode && window.QRCode.toCanvas) {
+        window.QRCode.toCanvas(canvas, payload, { width: 190, margin: 1 }, () => {});
+      }
+    }
+
+    // Audio Sink Router
+    let hdmiDeviceId = null;
+    async function bindAudioToHDMI(preferredKeywords) {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const outputs = devices.filter(d => d.kind === 'audiooutput');
+        const target = outputs.find(d => preferredKeywords.some(kw => d.label.toLowerCase().includes(kw.toLowerCase())));
+
+        if (target) {
+          hdmiDeviceId = target.deviceId;
+          document.getElementById('audio-status-pill').innerText = `🔊 Locked to HDMI: ${target.label}`;
+          document.querySelectorAll('audio, video').forEach(async el => {
+            if (typeof el.setSinkId === 'function') {
+              try { await el.setSinkId(hdmiDeviceId); } catch (e) {}
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Audio routing:', e.message);
+      }
+    }
+
+    if (window.require) {
+      const { ipcRenderer } = window.require('electron');
+
+      ipcRenderer.on('init_pairing_info', (event, data) => {
+        document.getElementById('display-pairing-id').innerText = data.pairingId;
+        document.getElementById('display-ip-address').innerText = `IP: ${data.ip}:${data.port}`;
+        renderQRCode(data.qrPayload);
+      });
+
+      ipcRenderer.on('route_hdmi_audio', (event, data) => {
+        bindAudioToHDMI(data.preferredKeywords);
+      });
+
+      ipcRenderer.on('remote_status_changed', (event, data) => {
+        if (data.connected) {
+          badge.classList.add('connected');
+          badge.innerText = `Android App Connected (${data.remotesCount})`;
+          modal.classList.add('hidden');
+        } else {
+          badge.classList.remove('connected');
+          badge.innerText = 'Waiting for Remote App';
+          modal.classList.remove('hidden');
+        }
+      });
+
+      ipcRenderer.on('tv_cursor_update', (event, data) => {
+        cursor.style.left = `${data.x}px`;
+        cursor.style.top = `${data.y}px`;
+      });
+
+      ipcRenderer.on('tv_mouse_click', (event, data) => {
+        cursor.classList.add('clicking');
+        setTimeout(() => cursor.classList.remove('clicking'), 150);
+        const el = document.elementFromPoint(data.x, data.y);
+        if (el) {
+          el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+          el.focus();
+        }
+      });
+
+      ipcRenderer.on('tv_nav_action', (event, action) => {
+        if (action === 'left') setFocusIndex(currentFocusIndex - 1);
+        if (action === 'right') setFocusIndex(currentFocusIndex + 1);
+        if (action === 'enter' || action === 'select') launchApp(gridCards[currentFocusIndex]);
+        if (action === 'home') setFocusIndex(0);
+      });
+
+      // Handle Volume update from phone
+      ipcRenderer.on('tv_volume_update', (event, data) => {
+        const volVal = Math.max(0, Math.min(100, data.value));
+        const normalized = volVal / 100;
+        console.log(`[TV Display] Volume set to: ${volVal}%`);
+
+        // Adjust HTML5 media elements on TV
+        document.querySelectorAll('audio, video').forEach(el => {
+          el.volume = normalized;
+        });
+
+        // Show on-screen TV Volume HUD notification
+        let hud = document.getElementById('volume-hud');
+        if (!hud) {
+          hud = document.createElement('div');
+          hud.id = 'volume-hud';
+          hud.style.cssText = `
+            position: fixed; top: 30px; right: 48px; background: rgba(15, 23, 42, 0.95);
+            border: 2px solid #3b82f6; border-radius: 18px; padding: 12px 24px;
+            display: flex; align-items: center; gap: 14px; z-index: 999999;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(59, 130, 246, 0.4);
+            color: #fff; font-size: 16px; font-weight: 700; transition: opacity 0.3s;
+          `;
+          document.body.appendChild(hud);
+        }
+        hud.innerHTML = `<span>🔊 TV Volume:</span> <span style="color:#60a5fa">${volVal}%</span>`;
+        hud.style.opacity = '1';
+        clearTimeout(hud.fadeTimer);
+        hud.fadeTimer = setTimeout(() => { hud.style.opacity = '0'; }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>
